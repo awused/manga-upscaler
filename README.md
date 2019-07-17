@@ -14,7 +14,9 @@ Run the manga-upscaler server on the same machine as your browser. Manga-Upscale
 
 # Requirements
 
-* [DeadSix27/waifu2x-converter-cpp](https://github.com/DeadSix27/waifu2x-converter-cpp).
+* Waifu2x
+    * [waifu2x-ncnn-vulkan](https://github.com/nihui/waifu2x-ncnn-vulkan) is recommended. Use the cunet model.
+* A browser extension capatable of running user scripts.
 
 <!--
 TODO - Implement cloudflare workaround

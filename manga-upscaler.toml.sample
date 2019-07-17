@@ -1,0 +1,23 @@
+# Port to listen on. You'll need to edit the userscript if you change this.
+Port = 8080
+
+# The number of upscaled images to save. Don't set this too large.
+CacheLimit = 50
+
+# Directory to store temporary files, leave blank for the system default temp directory
+# TempDirectory = 'C:\temp'
+
+# Where to find waifu2x-ncnn-vulkan.
+# On Windows this must be a full, absolute path (C:\path\to\waifu2x-ncnn-vulkan.exe).
+# If uncommented this takes precedence over both waifu2x-converter-cpp and waifu2x-caffe.
+Waifu2xNCNNVulkan = 'C:\path\to\waifu2x-ncnn-vulkan.exe'
+
+# The path to the chosen model for waifu2x-ncnn-vulkan.
+# The CUNET model is recommended for quality.
+# Speed is of minimal importance since all wallpapers are cached.
+Waifu2xNCNNVulkanModels = 'C:\path\to\waifu2x-ncnn-vulkan\models-cunet'
+
+# Uncomment to allow cloudscraper to work to attempt to bypass cloudflare.
+# TODO -- this is not yet implemented
+# Cloudscraper = true
+

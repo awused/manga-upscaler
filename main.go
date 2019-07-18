@@ -25,10 +25,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type Config struct {
+type config struct {
 	Port                    int
 	CacheLimit              int
 	TempDirectory           string
+	MaxAgeMinutes           int
 	LogFile                 string
 	Waifu2xNCNNVulkan       string
 	ForceOpenCL             bool
@@ -43,10 +44,15 @@ type upscaleJob struct {
 	outFile  string
 }
 
-var conf Config
-var cache map[string]string
-var ready map[string]chan struct{}
-var current []string
+type cachedImage struct {
+	file      string
+	ready     chan struct{}
+	timestamp time.Time
+}
+
+var conf config
+var cache map[string]*cachedImage
+var cachedQueue []string
 var mapLock sync.Mutex
 var gpuLock sync.Mutex
 var listener net.Listener
@@ -54,7 +60,7 @@ var tempDir string
 var closed = make(chan struct{})
 var jobsChan = make(chan *upscaleJob)
 
-var closedError = errors.New("Closed")
+var errClosed = errors.New("Closed")
 
 func main() {
 	flag.Parse()
@@ -75,15 +81,22 @@ func main() {
 	tempDir = temp
 	defer cleanup()
 
-	cache = make(map[string]string)
-	ready = make(map[string]chan struct{})
-	current = []string{}
+	cache = make(map[string]*cachedImage)
+	cachedQueue = []string{}
+
+	listener, err = net.Listen("tcp", "localhost:"+strconv.Itoa(conf.Port))
+	if err != nil {
+		log.Panic(err)
+	}
 
 	serverChan := make(chan error)
 	go runServer(serverChan)
 
 	upscalerChan := make(chan struct{})
 	go runUpscaler(upscalerChan)
+
+	expirationChan := make(chan struct{})
+	go runExpirer(expirationChan)
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGUSR1, syscall.SIGTERM)
@@ -93,9 +106,9 @@ Loop:
 		select {
 		case err = <-serverChan:
 			if err != nil {
-				log.Fatalf("webserver.Run() exited unexpectedly with [%v]", err)
+				log.Panicf("webserver.Run() exited unexpectedly with [%v]", err)
 			}
-			log.Fatalf("webserver.Run() exited unexpectedly")
+			log.Panicf("webserver.Run() exited unexpectedly")
 		case sig := <-sigs:
 			switch sig {
 			case syscall.SIGTERM:
@@ -113,6 +126,7 @@ Loop:
 
 	log.Info("SIGINT/SIGTERM caught, exiting")
 	listener.Close()
+	<-expirationChan
 	<-upscalerChan
 	<-serverChan
 }
@@ -126,13 +140,6 @@ func cleanup() {
 func runServer(serverChan chan<- error) {
 	defer close(serverChan)
 	var err error
-
-	listener, err = net.Listen("tcp", "localhost:"+strconv.Itoa(conf.Port))
-	if err != nil {
-		log.Error(err)
-		serverChan <- err
-		return
-	}
 
 	err = http.Serve(listener, getRouter())
 	select {
@@ -168,14 +175,25 @@ func cacheImage(key string) (string, error) {
 	imageURL := string(imageURLBytes)
 
 	extension := filepath.Ext(imageURL)
-
-	mapLock.Lock()
 	inFile := filepath.Join(tempDir, key) + extension
 	// These may be the same
 	outFile := filepath.Join(tempDir, key) + ".png"
+
+	mapLock.Lock()
+	existingImage, ok := cache[key]
+	if ok {
+		mapLock.Unlock()
+		<-existingImage.ready
+		return existingImage.file, nil
+	}
+
 	readyChan := make(chan struct{})
-	cache[key] = outFile
-	ready[key] = readyChan
+	cache[key] = &cachedImage{
+		file:      outFile,
+		ready:     readyChan,
+		timestamp: time.Now(),
+	}
+	cachedQueue = append(cachedQueue, key)
 	mapLock.Unlock()
 	defer close(readyChan)
 
@@ -187,7 +205,6 @@ func cacheImage(key string) (string, error) {
 		os.Remove(outFile)
 		mapLock.Lock()
 		delete(cache, key)
-		delete(ready, key)
 		mapLock.Unlock()
 		return "", err
 	}
@@ -206,9 +223,8 @@ func cacheImage(key string) (string, error) {
 		os.Remove(outFile)
 		mapLock.Lock()
 		delete(cache, key)
-		delete(ready, key)
 		mapLock.Unlock()
-		return "", closedError
+		return "", errClosed
 	}
 
 	select {
@@ -218,7 +234,6 @@ func cacheImage(key string) (string, error) {
 			os.Remove(outFile)
 			mapLock.Lock()
 			delete(cache, key)
-			delete(ready, key)
 			mapLock.Unlock()
 			return "", err
 		}
@@ -227,21 +242,9 @@ func cacheImage(key string) (string, error) {
 		os.Remove(outFile)
 		mapLock.Lock()
 		delete(cache, key)
-		delete(ready, key)
 		mapLock.Unlock()
-		return "", closedError
+		return "", errClosed
 	}
-	// TODO -- make this conditional?
-	// err = upscaleImage(inFile, outFile)
-	// if err != nil {
-	// 	os.Remove(inFile)
-	// 	os.Remove(outFile)
-	// 	mapLock.Lock()
-	// 	delete(cache, key)
-	// 	delete(ready, key)
-	// 	mapLock.Unlock()
-	// 	return "", err
-	// }
 
 	if inFile != outFile {
 		os.Remove(inFile)
@@ -276,22 +279,23 @@ func maybeDeleteImage() {
 	mapLock.Lock()
 	defer mapLock.Unlock()
 
-	if len(current) < conf.CacheLimit {
+	if len(cachedQueue) < conf.CacheLimit {
 		return
 	}
 
-	log.Error("deleting")
-	key := current[0]
-	current = current[1:]
+	deleteOldestImage()
+}
 
-	readyChan := ready[key]
-	<-readyChan
-	file := cache[key]
+// Requires mapLock to be held
+func deleteOldestImage() {
+	key := cachedQueue[0]
+	cachedQueue = cachedQueue[1:]
 
+	cached := cache[key]
+	<-cached.ready
 	delete(cache, key)
-	delete(ready, key)
 
-	os.Remove(file)
+	os.Remove(cached.file)
 }
 
 func upscaleImage(inFile, outFile string) error {
@@ -365,7 +369,7 @@ UpscaleLoop:
 	}
 
 	for _, v := range pendingJobs {
-		v.doneChan <- closedError
+		v.doneChan <- errClosed
 		close(v.doneChan)
 	}
 }
@@ -374,23 +378,59 @@ func serveImage(w http.ResponseWriter, r *http.Request) {
 	imageKey := r.URL.Path[1:]
 
 	mapLock.Lock()
-	ch, ok := ready[imageKey]
-	file := cache[imageKey]
+	cached, ok := cache[imageKey]
 	mapLock.Unlock()
+
+	file := ""
 
 	if !ok {
 		var err error
 		file, err = cacheImage(imageKey)
-		if err == closedError {
+		if err == errClosed {
 			return
 		} else if err != nil {
 			log.Panic(err)
 		}
 	} else {
-		<-ch
+		file = cached.file
+		<-cached.ready
 		// The file may no longer exist but either way we're serving an error
 	}
 
 	w.Header().Set("Cache-Control", "max-age=2592000") // 30 days
 	http.ServeFile(w, r, file)
+}
+
+func runExpirer(doneChan chan<- struct{}) {
+	defer close(doneChan)
+
+	maxMinutes := time.Duration(conf.MaxAgeMinutes) * time.Minute
+	if conf.MaxAgeMinutes < 10 {
+		// Testing
+		maxMinutes = 10 * time.Minute
+	}
+
+ExpireLoop:
+	for true {
+		expiredTime := time.Now().Add(-1 * maxMinutes)
+		nextWakeTime := time.Now().Add(maxMinutes)
+
+		mapLock.Lock()
+		for len(cachedQueue) > 0 {
+			cached := cache[cachedQueue[0]]
+			if cached.timestamp.After(expiredTime) {
+				nextWakeTime = cached.timestamp.Add(maxMinutes)
+				break
+			}
+
+			deleteOldestImage()
+		}
+		mapLock.Unlock()
+
+		select {
+		case <-time.After(time.Until(nextWakeTime)):
+		case <-closed:
+			break ExpireLoop
+		}
+	}
 }

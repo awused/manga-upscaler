@@ -62,6 +62,12 @@ func main() {
 		log.Panic(err)
 	}
 
+	log.SetOutput(os.Stdout)
+	log.SetFormatter(&log.TextFormatter{
+		ForceColors:   true,
+		FullTimestamp: true,
+	})
+
 	temp, err := ioutil.TempDir(conf.TempDirectory, "manga-upscaler")
 	if err != nil {
 		log.Panic(err)
@@ -138,6 +144,12 @@ func runServer(serverChan chan<- error) {
 }
 
 func getRouter() http.Handler {
+	middleware.DefaultLogger = middleware.RequestLogger(
+		&middleware.DefaultLogFormatter{
+			Logger:  log.StandardLogger(),
+			NoColor: false,
+		})
+
 	router := chi.NewRouter()
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Logger)
@@ -341,7 +353,7 @@ UpscaleLoop:
 		}
 
 		sort.Slice(pendingJobs, func(i, j int) bool {
-			return !natsort.Compare(pendingJobs[i].url, pendingJobs[j].url)
+			return natsort.Compare(pendingJobs[j].url, pendingJobs[i].url)
 		})
 
 		// Take the highest priority job and execute it

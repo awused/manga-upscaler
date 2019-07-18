@@ -32,11 +32,9 @@ TODOs
 
 */
 
-const IMAGE_REGEX = /^(https:\/\/[a-zA-Z0-9]+\.mangadex\.org\/data\/[a-zA-Z0-9]+\/[a-zA-Z]+)([0-9]+)\.(jpg|png|jpeg)$/i;
+const IMAGE_REGEX = /^(https:\/\/([a-zA-Z0-9]+\.)?mangadex\.org\/data\/[a-zA-Z0-9]+\/[a-zA-Z]+)([0-9]+)\.(jpg|png|jpeg)$/i;
 
 let enabled = null;
-
-let lastReplaced = '';
 
 const preloadedImageMap = new Map();  // Keep a few image elements on hand
 
@@ -53,13 +51,14 @@ const replace = (img) => {
   let newElement = preloadedImageMap.get(img.src);
   if (!newElement) {
     newElement = newImage(img.src);
-    preloadedImageMap.set(img.src, newElement);
   }
 
   // Delete the old image and attach a new one to avoid visible transitions.
   img.insertAdjacentElement('afterend', newElement);
+  // Insert a clone into the map so it doesn't get mutated.
+  // We display the "original" since it will display instantly if loaded.
+  preloadedImageMap.set(img.src, newElement.cloneNode());
   img.parentNode.removeChild(img);
-  lastReplaced = img.src;
 };
 
 // Pre-loading
@@ -79,10 +78,10 @@ function getNumberFromElement(cls) {
 // The mangadex API has all this information but it'd be better to do that on the server.
 // TODO -- Do server side preloading instead.
 const preload = (srcMatch) => {
-  if (isNaN(srcMatch[2])) {
+  if (isNaN(srcMatch[3])) {
     return;
   }
-  const currentFile = Number(srcMatch[2]);
+  const currentFile = Number(srcMatch[3]);
 
   // currentFile and currentPage may not match
   const currentPage = getNumberFromElement('current-page');
@@ -95,7 +94,7 @@ const preload = (srcMatch) => {
 
 
   for (let i = currentFile + 1; i <= totalPages + pageOffset && i <= currentFile + preloadLimit; i++) {
-    const preloadSrc = srcMatch[1] + i + '.' + srcMatch[3];
+    const preloadSrc = srcMatch[1] + i + '.' + srcMatch[4];
     if (preloadedImageMap.has(preloadSrc)) {
       continue;
     }
@@ -118,11 +117,6 @@ const handleMutation = () => {
     let match;
     for (let img of document.images) {
       if (match = img.src.match(IMAGE_REGEX)) {
-        if (img.src === lastReplaced) {
-          // As a sanity check against somehow fighting with mangadex.
-          return;
-        }
-
         matched = true;
         replace(img);
         preload(match);

@@ -2,6 +2,7 @@
 Port = 8080
 
 # The number of upscaled images to save. Don't set this too large.
+# Minimum 1
 CacheLimit = 50
 
 # The maximum age of images in the cache.

@@ -74,6 +74,13 @@ func main() {
 		FullTimestamp: true,
 	})
 
+	if conf.CacheLimit < 1 {
+		conf.CacheLimit = 1
+	}
+	if conf.MaxAgeMinutes < 10 {
+		conf.MaxAgeMinutes = 10
+	}
+
 	temp, err := ioutil.TempDir(conf.TempDirectory, "manga-upscaler")
 	if err != nil {
 		log.Panic(err)
@@ -279,7 +286,7 @@ func maybeDeleteImage() {
 	mapLock.Lock()
 	defer mapLock.Unlock()
 
-	if len(cachedQueue) < conf.CacheLimit {
+	if len(cachedQueue) <= conf.CacheLimit {
 		return
 	}
 
@@ -405,10 +412,6 @@ func runExpirer(doneChan chan<- struct{}) {
 	defer close(doneChan)
 
 	maxMinutes := time.Duration(conf.MaxAgeMinutes) * time.Minute
-	if conf.MaxAgeMinutes < 10 {
-		// Testing
-		maxMinutes = 10 * time.Minute
-	}
 
 ExpireLoop:
 	for true {

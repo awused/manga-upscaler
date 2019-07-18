@@ -99,12 +99,12 @@ const preload = (srcMatch) => {
       continue;
     }
 
-    if (preloadedImageMap.size === preloadLimit) {
-      preloadedImageMap.delete(preloadedImageMap.keys().next().value);
-    }
-
     preloadedImageMap.set(preloadSrc, newImage(preloadSrc));
     console.log('Preloading: ' + preloadSrc);
+  }
+
+  while (preloadedImageMap.size > 2 * preloadLimit) {
+    preloadedImageMap.delete(preloadedImageMap.keys().next().value);
   }
 };
 

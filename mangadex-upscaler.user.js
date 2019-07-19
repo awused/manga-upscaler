@@ -27,14 +27,14 @@ TODOs
 
 - Add error handling.
 - Move to server-side preloading using the mangadex API but This Is Fine for now.
-- The biggest weakness is preloading not crossing chapter boundaries, which is
-    bad for 4komas but bearable for everything else.
 
 */
 
 const IMAGE_REGEX = /^(https:\/\/([a-zA-Z0-9]+\.)?mangadex\.org\/data\/[a-zA-Z0-9]+\/[a-zA-Z]+)([0-9]+)\.(jpg|png|jpeg)$/i;
 
 let enabled = null;
+let currentOriginalSrc = '';
+let currentImage = null;
 
 const preloadedImageMap = new Map();  // Keep a few image elements on hand
 
@@ -59,6 +59,9 @@ const replace = (img) => {
   // We display the "original" since it will display instantly if loaded.
   preloadedImageMap.set(img.src, newElement.cloneNode());
   img.parentNode.removeChild(img);
+
+  currentImage = newElement;
+  currentOriginalSrc = img.src;
 };
 
 // Pre-loading
@@ -122,11 +125,20 @@ const handleMutation = () => {
         preload(match);
       }
     }
+  } else {
+    if (currentImage && currentImage.src != currentOriginalSrc) {
+      currentImage.src = currentOriginalSrc;
+    }
   }
 
   if (matched || !enabled) {
     // Add a toggle button if not present
-    if (document.getElementById('mangadex-upscaler-toggle')) {
+    let div = document.getElementById('mangadex-upscaler-toggle');
+    if (div) {
+      if (div.enabled != enabled) {
+        div.enabled = enabled;
+        div.innerText = 'Toggle Upscaling ' + (enabled ? '[on]' : '[off]');
+      }
       return;
     }
 
@@ -135,7 +147,7 @@ const handleMutation = () => {
       return;
     }
 
-    const div = document.createElement('div');
+    div = document.createElement('div');
     div.setAttribute('id', 'mangadex-upscaler-toggle');
     div.setAttribute('class', 'reader-controls-mode-direction w-100 cursor-pointer pb-2 px-2');
     div.enabled = enabled;
@@ -157,17 +169,11 @@ const changeEnabled = (value) => {
   if (enabled) {
     mutationObserver.observe(document.body, {
       childList: true,
-      subtree: true
+      subtree: true,
     });
   } else {
     handleMutation();
     mutationObserver.disconnect();
-  }
-
-  const div = document.getElementById('mangadex-upscaler-toggle')
-  if (div.enabled != enabled) {
-    div.enabled = enabled;
-    div.innerText = 'Toggle Upscaling ' + (enabled ? '[on]' : '[off]');
   }
 };
 

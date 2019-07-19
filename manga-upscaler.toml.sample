@@ -1,7 +1,8 @@
 # Port to listen on. You'll need to edit the userscript if you change this.
 Port = 8080
 
-# The number of upscaled images to save. Don't set this too large.
+# The number of upscaled images to save.
+# Don't set this too large as it will waste disk space or memory when using tmpfs.
 # Minimum 1
 CacheLimit = 50
 

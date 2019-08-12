@@ -106,7 +106,7 @@ func main() {
 	go runExpirer(expirationChan)
 
 	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGUSR1, syscall.SIGTERM)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
 Loop:
 	for {
@@ -124,8 +124,6 @@ Loop:
 			case syscall.SIGINT:
 				close(closed)
 				break Loop
-			case syscall.SIGUSR1:
-				log.Info("SIGUSR1")
 			}
 		}
 	}

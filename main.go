@@ -268,10 +268,10 @@ func downloadImage(url string, file string) error {
 
 	// TODO -- cloudscraper
 	resp, err := http.Get(url)
-	defer resp.Body.Close()
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	_, err = io.Copy(f, resp.Body)
 	if err != nil {

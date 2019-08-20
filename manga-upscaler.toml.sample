@@ -21,7 +21,6 @@ Waifu2xNCNNVulkan = 'C:\path\to\waifu2x-ncnn-vulkan.exe'
 
 # The path to the chosen model for waifu2x-ncnn-vulkan.
 # The CUNET model is recommended for quality.
-# Speed is of minimal importance since all wallpapers are cached.
 Waifu2xNCNNVulkanModels = 'C:\path\to\waifu2x-ncnn-vulkan\models-cunet'
 
 # Uncomment to allow cloudscraper to work to attempt to bypass cloudflare.

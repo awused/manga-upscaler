@@ -30,7 +30,8 @@ TODOs
 
 */
 
-const IMAGE_REGEX = /^(https:\/\/([a-zA-Z0-9]+\.)?mangadex\.org\/data\/[a-zA-Z0-9]+\/[a-zA-Z]+)([0-9]+)\.(jpg|png|jpeg)$/i;
+const IMAGE_REGEX = /^(https:\/\/([a-zA-Z0-9]+\.)?mangadex\.org\/data\/[a-zA-Z0-9]+\/[a-zA-Z]*)([0-9]+)\.(jpg|png|jpeg)$/i;
+
 
 let enabled = null;
 let currentOriginalSrc = '';

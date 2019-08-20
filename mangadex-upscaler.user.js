@@ -2,7 +2,7 @@
 // @name        MangaDex-Upscaler
 // @description Upscale mangadex images using https://github.com/awused/mangadex-upscaler.
 // @include     https://mangadex.org/*
-// @version     0.1
+// @version     0.2
 // @grant       unsafeWindow
 // @grant       GM.setValue
 // @grant       GM.getValue
@@ -26,12 +26,11 @@ const preloadLimit = 10;
 TODOs
 
 - Add error handling.
-- Move to server-side preloading using the mangadex API but This Is Fine for now.
 
 */
 
 const IMAGE_REGEX = /^(https:\/\/([a-zA-Z0-9]+\.)?mangadex\.org\/data\/[a-zA-Z0-9]+\/[a-zA-Z]*)([0-9]+)\.(jpg|png|jpeg)$/i;
-
+const API_ROOT = 'https://mangadex.org/api';
 
 let enabled = null;
 let currentOriginalSrc = '';
@@ -39,11 +38,25 @@ let currentImage = null;
 
 const preloadedImageMap = new Map();  // Keep a few image elements on hand
 
+let imageServer = localStorage.getItem('reader.imageServer');
+if (!imageServer || imageServer === '0') {
+  imageServer = 'null';
+}
+
+let currentMangaId = undefined;
+let currentMangaPromise = Promise.resolve(undefined);
+
+const chapterPromiseMap = new Map();  // Keep all chapter metadata on hand
+
 // Replacing the current image
 
-const newImage = (src) => {
+const newImage = (src, chapter, page) => {
   const img = new Image();
-  img.src = `http://localhost:${port}/${btoa(src)}`;
+  let newSrc = `http://localhost:${port}/${btoa(src)}`;
+  if (chapter) {
+    newSrc += `?chapter=${chapter}&page=${page}`;
+  }
+  img.src = newSrc;
   img.href = src;
   return img;
 };
@@ -65,51 +78,120 @@ const replace = (img) => {
   currentOriginalSrc = img.src;
 };
 
-// Pre-loading
 
-function getNumberFromElement(cls) {
-  const element = document.getElementsByClassName(cls)[0];
-  if (!element) {
-    return null;
-  }
+// Preloading
 
-  if (isNaN(element.innerText)) {
-    return null;
+const getOrFetchChapter = (id) => {
+  if (!chapterPromiseMap.has(id)) {
+    chapterPromiseMap
+        .set(
+            id,
+            fetch(`${API_ROOT}?id=${id}&server=${imageServer}&type=chapter`)
+                .then((response) => response.json(), () => undefined));
   }
-  return Number(element.innerText);
+  return chapterPromiseMap.get(id);
 };
 
-// The mangadex API has all this information but it'd be better to do that on the server.
-// TODO -- Do server side preloading instead.
-const preload = (srcMatch) => {
-  if (isNaN(srcMatch[3])) {
+const getNextChapterId = (manga, id) => {
+  // TODO -- handle group changes when one group stops and another takes over
+  // For now we're only concerned with exact matches; same language, same group
+  const currentChapter = manga.chapter[id];
+  if (!currentChapter) {
     return;
   }
-  const currentFile = Number(srcMatch[3]);
 
-  // currentFile and currentPage may not match
-  const currentPage = getNumberFromElement('current-page');
-  const totalPages = getNumberFromElement('total-pages');
-  if (currentPage === null || totalPages === null) {
-    console.log('Could not determine currentPages/totalPages.');
-    return;
-  }
-  const pageOffset = currentFile - currentPage;
+  let nextChapterId = undefined;
+  let nextChapter = undefined;
 
-
-  for (let i = currentFile + 1; i <= totalPages + pageOffset && i <= currentFile + preloadLimit; i++) {
-    const preloadSrc = srcMatch[1] + i + '.' + srcMatch[4];
-    if (preloadedImageMap.has(preloadSrc)) {
-      continue;
+  Object.keys(manga.chapter).forEach((chapterId) => {
+    const chapter = manga.chapter[chapterId];
+    if (chapter.lang_code !== currentChapter.lang_code ||
+        // Only bother checking one group id
+        chapter.group_id !== currentChapter.group_id) {
+      return;
     }
 
-    preloadedImageMap.set(preloadSrc, newImage(preloadSrc));
-    console.log('Preloading: ' + preloadSrc);
+    // Chapters can be in any order, so we're looking for the smallest chapter
+    // greater than the current chapter. Chapter IDs can be floats, but
+    // hopefully not anything weirder.
+    if (parseFloat(currentChapter.chapter) >= parseFloat(chapter.chapter)) {
+      return;
+    }
+
+    if (nextChapter && parseFloat(nextChapter.chapter) < parseFloat(chapter.chapter)) {
+      return;
+    }
+
+    nextChapterId = chapterId;
+    nextChapter = chapter;
+  });
+
+  return nextChapterId;
+};
+
+const preload = async (manga, currentChapterId, currentPage) => {
+  let page = parseInt(currentPage);  // This is 1-indexed so it's actually the next page
+  let chapterId = currentChapterId;
+  let chapter = await getOrFetchChapter(chapterId);
+
+  let preloadRemaining = preloadLimit;
+
+  while (chapter) {
+    for (; chapter.page_array.length > page && preloadRemaining >= 0; page++) {
+      preloadSrc = chapter.server + chapter.hash + '/' + chapter.page_array[page];
+      preloadRemaining--;
+
+      if (preloadedImageMap.has(preloadSrc)) {
+        continue;
+      }
+
+      preloadedImageMap.set(preloadSrc, newImage(preloadSrc, chapter.chapter, page));
+      console.log('Preloading: ' + preloadSrc);
+    }
+    page = 0;
+
+    if (preloadRemaining <= 0) {
+      break;
+    }
+
+    chapterId = getNextChapterId(manga, chapterId);
+    chapter = chapterId && await getOrFetchChapter(chapterId);
   }
 
   while (preloadedImageMap.size > 2 * preloadLimit) {
     preloadedImageMap.delete(preloadedImageMap.keys().next().value);
   }
+};
+
+const checkCurrentStateAndPreload = async () => {
+  const content = document.getElementById('content');
+  if (!content) {
+    return;
+  }
+
+  const mangaId = content.getAttribute('data-manga-id');
+  const chapterId = content.getAttribute('data-chapter-id');
+  const currentPage = content.getAttribute('data-current-page')
+  if (!mangaId || !chapterId || !currentPage) {
+    return;
+  }
+
+  if (currentMangaId !== mangaId) {
+    currentMangaId = mangaId;
+
+    chapterPromiseMap.clear();
+    currentMangaPromise =
+        fetch(`${API_ROOT}?id=${mangaId}&type=manga`)
+            .then((response) => response.json(), () => undefined);
+  }
+  manga = await currentMangaPromise;
+  if (!manga) {
+    console.log('Unable to fetch manga metadata from API. Giving up.');
+    changeEnabled(false);
+    return;
+  }
+
+  preload(manga, chapterId, currentPage);
 };
 
 // Enabling/disabling
@@ -120,16 +202,20 @@ const handleMutation = () => {
   if (enabled) {
     let match;
     for (let img of document.images) {
-      if (match = img.src.match(IMAGE_REGEX)) {
+      if (img.src.match(IMAGE_REGEX)) {
         matched = true;
         replace(img);
-        preload(match);
       }
     }
   } else {
     if (currentImage && currentImage.src != currentOriginalSrc) {
       currentImage.src = currentOriginalSrc;
     }
+  }
+
+  if (matched) {
+    // Returns a promise that we do not need to wait on
+    checkCurrentStateAndPreload();
   }
 
   if (matched || !enabled) {

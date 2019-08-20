@@ -42,6 +42,9 @@ type upscaleJob struct {
 	url      string
 	inFile   string
 	outFile  string
+	// Chapter and page are used to prioritize jobs
+	chapter string
+	page    string
 }
 
 type cachedImage struct {
@@ -172,7 +175,7 @@ func getRouter() http.Handler {
 	return router
 }
 
-func cacheImage(key string) (string, error) {
+func cacheImage(key string, chapter string, page string) (string, error) {
 	imageURLBytes, err := base64.StdEncoding.DecodeString(key)
 	if err != nil {
 		return "", err
@@ -218,7 +221,9 @@ func cacheImage(key string) (string, error) {
 		inFile:   inFile,
 		outFile:  outFile,
 		url:      imageURL,
-		doneChan: make(chan error),
+		doneChan: make(chan error, 1),
+		chapter:  chapter,
+		page:     page,
 	}
 
 	select {
@@ -361,8 +366,18 @@ UpscaleLoop:
 			}
 		}
 
+		// Sort in reverse order
 		sort.Slice(pendingJobs, func(i, j int) bool {
-			return natsort.Compare(pendingJobs[j].url, pendingJobs[i].url)
+			a := pendingJobs[i]
+			b := pendingJobs[j]
+			if a.chapter != b.chapter {
+				return a.chapter > b.chapter
+			}
+			if a.page != b.page {
+				return a.page > b.page
+			}
+			// Fall back to natural sorting based on the URL
+			return natsort.Compare(b.url, a.url)
 		})
 
 		// Take the highest priority job and execute it
@@ -381,6 +396,8 @@ UpscaleLoop:
 
 func serveImage(w http.ResponseWriter, r *http.Request) {
 	imageKey := r.URL.Path[1:]
+	chapter := r.URL.Query().Get("chapter")
+	page := r.URL.Query().Get("page")
 
 	mapLock.Lock()
 	cached, ok := cache[imageKey]
@@ -390,7 +407,7 @@ func serveImage(w http.ResponseWriter, r *http.Request) {
 
 	if !ok {
 		var err error
-		file, err = cacheImage(imageKey)
+		file, err = cacheImage(imageKey, chapter, page)
 		if err == errClosed {
 			return
 		} else if err != nil {

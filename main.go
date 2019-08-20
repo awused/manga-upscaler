@@ -371,10 +371,12 @@ UpscaleLoop:
 			a := pendingJobs[i]
 			b := pendingJobs[j]
 			if a.chapter != b.chapter {
-				return a.chapter > b.chapter
+				// Natsort is unnecessary here but it should handle even weird
+				// edge cases well
+				return natsort.Compare(b.chapter, a.chapter)
 			}
 			if a.page != b.page {
-				return a.page > b.page
+				return natsort.Compare(b.page, a.page)
 			}
 			// Fall back to natural sorting based on the URL
 			return natsort.Compare(b.url, a.url)

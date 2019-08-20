@@ -34,5 +34,4 @@ I include some limited workarounds for cloudflare protectected feeds. I update t
 # TODOs
 
 * Handle cloudflare using cloudscraper
-* Better preloading of mangadex images using their API
 * Add a maximum resolution feature to avoid wasting time and memory unnecessarily

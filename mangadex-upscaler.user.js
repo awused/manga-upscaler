@@ -138,8 +138,11 @@ const preload = async (manga, currentChapterId, currentPage) => {
 
   while (chapter) {
     for (; chapter.page_array.length > page && preloadRemaining >= 0; page++) {
-      preloadSrc = chapter.server + chapter.hash + '/' + chapter.page_array[page];
       preloadRemaining--;
+      preloadSrc = chapter.server + chapter.hash + '/' + chapter.page_array[page];
+      if (chapter.server === '/data/') {
+        preloadSrc = 'https://mangadex.org' + preloadSrc;
+      }
 
       if (preloadedImageMap.has(preloadSrc)) {
         continue;

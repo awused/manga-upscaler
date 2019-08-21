@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name        MangaDex-Upscaler
-// @description Upscale mangadex images using https://github.com/awused/mangadex-upscaler.
+// @description Upscale mangadex images using https://github.com/awused/manga-upscaler.
 // @include     https://mangadex.org/*
-// @version     0.2
+// @version     0.3
 // @grant       unsafeWindow
 // @grant       GM.setValue
 // @grant       GM.getValue
-// @updateURL   https://raw.githubusercontent.com/awused/mangadex-upscaler/master/mangadex-upscaler.user.js
-// @downloadURL https://raw.githubusercontent.com/awused/mangadex-upscaler/master/mangadex-upscaler.user.js
+// @updateURL   https://raw.githubusercontent.com/awused/manga-upscaler/master/mangadex-upscaler.user.js
+// @downloadURL https://raw.githubusercontent.com/awused/manga-upscaler/master/mangadex-upscaler.user.js
 // ==/UserScript==
 
 // Configuration options

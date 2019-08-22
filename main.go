@@ -371,6 +371,13 @@ UpscaleLoop:
 			a := pendingJobs[i]
 			b := pendingJobs[j]
 			if a.chapter != b.chapter {
+				// Prioritize pages without chapter/page numbers specified
+				if a.chapter == "" {
+					return false
+				} else if b.chapter == "" {
+					return true
+				}
+
 				// Natsort is unnecessary here but it should handle even weird
 				// edge cases well
 				return natsort.Compare(b.chapter, a.chapter)

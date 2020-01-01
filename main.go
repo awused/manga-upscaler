@@ -302,6 +302,9 @@ func deleteOldestImage() {
 	cachedQueue = cachedQueue[1:]
 
 	cached := cache[key]
+	if cached == nil {
+		return
+	}
 	<-cached.ready
 	delete(cache, key)
 

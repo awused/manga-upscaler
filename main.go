@@ -445,6 +445,11 @@ ExpireLoop:
 		mapLock.Lock()
 		for len(cachedQueue) > 0 {
 			cached := cache[cachedQueue[0]]
+			if cached == nil {
+				cachedQueue = cachedQueue[1:]
+				continue
+			}
+
 			if cached.timestamp.After(expiredTime) {
 				nextWakeTime = cached.timestamp.Add(maxMinutes)
 				break

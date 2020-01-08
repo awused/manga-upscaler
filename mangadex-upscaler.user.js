@@ -2,7 +2,8 @@
 // @name        MangaDex-Upscaler
 // @description Upscale mangadex images using https://github.com/awused/manga-upscaler.
 // @include     https://mangadex.org/*
-// @version     0.3
+// @include     https://mangadex.cc/*
+// @version     0.4
 // @grant       unsafeWindow
 // @grant       GM.setValue
 // @grant       GM.getValue
@@ -29,8 +30,8 @@ TODOs
 
 */
 
-const IMAGE_REGEX = /^(https:\/\/([a-zA-Z0-9]+\.)?mangadex\.org\/data\/[a-zA-Z0-9]+\/[a-zA-Z]*)([0-9]+)\.(jpg|png|jpeg)$/i;
-const API_ROOT = 'https://mangadex.org/api';
+const IMAGE_REGEX = /^(https:\/\/([a-zA-Z0-9]+\.)?mangadex\.(org|cc)\/data\/[a-zA-Z0-9]+\/[a-zA-Z]*)([0-9]+)\.(jpg|png|jpeg)$/i;
+const API_ROOT = window.location.origin + '/api';
 
 let enabled = null;
 let currentOriginalSrc = '';

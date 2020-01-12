@@ -7,7 +7,8 @@ Manga-Upscaler
 
 Copy `manga-upscaler.toml.sample` to `~/.config/manga-upscaler/manga-upscaler.toml` or `~/.manga-upscaler.toml` and fill it out according to the instructions.
 
-Add [mangadex-upscaler.user.js](https://raw.githubusercontent.com/awused/manga-upscaler/master/mangadex-upscaler.user.js) to your browser as a user script..
+Add [mangadex-upscaler.user.js](https://raw.githubusercontent.com/awused/manga-upscaler/master/mangadex-upscaler.user.js) to your browser as a user script.
+Toggle upscaling with the u key or by clicking the toggle added to the display controls.
 
 Run the manga-upscaler server on the same machine as your browser. Manga-Upscaler does not support running it on a separate machine.
 

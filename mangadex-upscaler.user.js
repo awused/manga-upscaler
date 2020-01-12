@@ -3,7 +3,7 @@
 // @description Upscale mangadex images using https://github.com/awused/manga-upscaler.
 // @include     https://mangadex.org/*
 // @include     https://mangadex.cc/*
-// @version     0.4
+// @version     0.5
 // @grant       unsafeWindow
 // @grant       GM.setValue
 // @grant       GM.getValue
@@ -27,6 +27,7 @@ const preloadLimit = 10;
 TODOs
 
 - Add error handling.
+- Specify target size.
 
 */
 
@@ -142,7 +143,7 @@ const preload = async (manga, currentChapterId, currentPage) => {
       preloadRemaining--;
       preloadSrc = chapter.server + chapter.hash + '/' + chapter.page_array[page];
       if (chapter.server === '/data/') {
-        preloadSrc = 'https://mangadex.org' + preloadSrc;
+        preloadSrc = window.location.origin + preloadSrc;
       }
 
       if (preloadedImageMap.has(preloadSrc)) {
@@ -274,4 +275,11 @@ const toggleEnabled = () => {
   handleMutation();
 };
 
+const keyUp = (e) => {
+  if (e.key === 'u') {
+    toggleEnabled();
+  }
+};
+
+document.addEventListener('keyup', keyUp, false);
 GM.getValue('mangadex-upscaler-enabled', true).then(changeEnabled);

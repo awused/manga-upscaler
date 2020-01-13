@@ -3,7 +3,7 @@
 // @description Upscale mangadex images using https://github.com/awused/manga-upscaler.
 // @include     https://mangadex.org/*
 // @include     https://mangadex.cc/*
-// @version     0.5
+// @version     0.6
 // @grant       unsafeWindow
 // @grant       GM.setValue
 // @grant       GM.getValue
@@ -32,11 +32,10 @@ TODOs
 */
 
 const IMAGE_REGEX = /^(https:\/\/([a-zA-Z0-9]+\.)?mangadex\.(org|cc)\/data\/[a-zA-Z0-9]+\/[a-zA-Z]*)([0-9]+)\.(jpg|png|jpeg)$/i;
+const LOCALHOST_REGEX = new RegExp(`^http:\/\/localhost:${port}\/([^?]+)`);
 const API_ROOT = window.location.origin + '/api';
 
 let enabled = null;
-let currentOriginalSrc = '';
-let currentImage = null;
 
 const preloadedImageMap = new Map();  // Keep a few image elements on hand
 
@@ -54,7 +53,7 @@ const chapterPromiseMap = new Map();  // Keep all chapter metadata on hand
 
 const newImage = (src, chapter, page) => {
   const img = new Image();
-  let newSrc = `http://localhost:${port}/${btoa(src)}`;
+  let newSrc = `http://localhost:${port}/${encodeURIComponent(btoa(src))}`;
   if (chapter) {
     newSrc += `?chapter=${chapter}&page=${page}`;
   }
@@ -75,9 +74,6 @@ const replace = (img) => {
   // We display the "original" since it will display instantly if loaded.
   preloadedImageMap.set(img.src, newElement.cloneNode());
   img.parentNode.removeChild(img);
-
-  currentImage = newElement;
-  currentOriginalSrc = img.src;
 };
 
 
@@ -205,7 +201,6 @@ const handleMutation = () => {
   let matched = false;
 
   if (enabled) {
-    let match;
     for (let img of document.images) {
       if (img.src.match(IMAGE_REGEX)) {
         matched = true;
@@ -213,8 +208,11 @@ const handleMutation = () => {
       }
     }
   } else {
-    if (currentImage && currentImage.src != currentOriginalSrc) {
-      currentImage.src = currentOriginalSrc;
+    for (let img of document.images) {
+      let match = img.src.match(LOCALHOST_REGEX);
+      if (match) {
+        img.src = atob(decodeURIComponent(match[1]));
+      }
     }
   }
 

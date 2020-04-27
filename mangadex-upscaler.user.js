@@ -3,7 +3,7 @@
 // @description Upscale mangadex images using https://github.com/awused/manga-upscaler.
 // @include     https://mangadex.org/*
 // @include     https://mangadex.cc/*
-// @version     0.6
+// @version     0.7
 // @grant       unsafeWindow
 // @grant       GM.setValue
 // @grant       GM.getValue
@@ -26,7 +26,6 @@ const preloadLimit = 10;
 
 TODOs
 
-- Add error handling.
 - Specify target size.
 
 */
@@ -59,6 +58,12 @@ const newImage = (src, chapter, page) => {
   }
   img.src = newSrc;
   img.href = src;
+  img.onerror = (e) => {
+    // Retry once automatically, but any further retries will be manual.
+    console.log(`Retrying ${chapter}, ${page}`);
+    img.onerror = null;
+    img.src = img.src;
+  };
   return img;
 };
 

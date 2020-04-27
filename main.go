@@ -278,6 +278,10 @@ func downloadImage(url string, file string) error {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != 200 {
+		return errors.New(resp.Status)
+	}
+
 	_, err = io.Copy(f, resp.Body)
 	if err != nil {
 		return err

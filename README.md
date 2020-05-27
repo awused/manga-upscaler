@@ -35,4 +35,3 @@ Run the manga-upscaler server on the same machine as your browser. Manga-Upscale
 * Add a maximum resolution feature to avoid wasting time and memory unnecessarily
 * POST image data from the browser to the server to avoid double-fetching images and avoid cloudflare.
 * Handle cloudflare using cloudscraper
-* Start prefetching immediately, not just once the first image has finished loading.

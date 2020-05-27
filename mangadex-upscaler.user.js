@@ -3,7 +3,7 @@
 // @description Upscale mangadex images using https://github.com/awused/manga-upscaler.
 // @include     https://mangadex.org/*
 // @include     https://mangadex.cc/*
-// @version     0.8
+// @version     0.9.1
 // @grant       unsafeWindow
 // @grant       GM.setValue
 // @grant       GM.getValue
@@ -18,7 +18,7 @@ const port = 8080;
 
 // The maximum number of images preloaded per-tab.
 // Multiple tabs will compete for the limited cache slots (controlled by CacheLimit) on the server.
-const preloadLimit = 10;
+const preloadLimit = 20;
 
 // End configuration options
 
@@ -233,7 +233,7 @@ const handleMutation = () => {
     }
   }
 
-  if (matched) {
+  if (upscaleEnabled || prefetchEnabled) {
     // Returns a promise that we do not need to wait on
     checkCurrentStateAndPreload();
   }

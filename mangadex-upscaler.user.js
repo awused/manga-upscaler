@@ -3,7 +3,7 @@
 // @description Upscale mangadex images using https://github.com/awused/manga-upscaler.
 // @include     https://mangadex.org/*
 // @include     https://mangadex.cc/*
-// @version     0.9.1
+// @version     0.9.2
 // @grant       unsafeWindow
 // @grant       GM.setValue
 // @grant       GM.getValue
@@ -215,20 +215,13 @@ const checkCurrentStateAndPreload = async () => {
 // Enabling/disabling
 
 const handleMutation = () => {
-  let matched = false;
-
   for (let img of document.images) {
-    if (!upscaleEnabled) {
+    if (upscaleEnabled && img.src.match(IMAGE_REGEX)) {
+      replace(img);
+    } else if (!upscaleEnabled) {
       let match = img.src.match(LOCALHOST_REGEX);
       if (match) {
         img.src = atob(decodeURIComponent(match[1]));
-      }
-    }
-
-    if ((upscaleEnabled || prefetchEnabled) && img.src.match(IMAGE_REGEX)) {
-      matched = true;
-      if (upscaleEnabled) {
-        replace(img);
       }
     }
   }
@@ -238,44 +231,42 @@ const handleMutation = () => {
     checkCurrentStateAndPreload();
   }
 
-  if (matched || (!upscaleEnabled && !prefetchEnabled)) {
-    // Add a toggle button if not present
-    let upscaleDiv = document.getElementById('mangadex-upscaler-toggle');
-    let prefetchDiv = document.getElementById('mangadex-prefetch-toggle');
-    if (upscaleDiv) {
-      if (upscaleDiv.enabled != upscaleEnabled) {
-        upscaleDiv.enabled = upscaleEnabled;
-        upscaleDiv.innerText = 'Toggle Upscaling ' + (upscaleEnabled ? '[on]' : '[off]');
-      }
-      if (prefetchDiv.enabled != prefetchEnabled) {
-        prefetchDiv.enabled = prefetchEnabled;
-        prefetchDiv.innerText = 'Toggle Prefetching ' + (prefetchEnabled ? '[on]' : '[off]');
-      }
-      return;
+  // Add a toggle button if not present
+  let upscaleDiv = document.getElementById('mangadex-upscaler-toggle');
+  let prefetchDiv = document.getElementById('mangadex-prefetch-toggle');
+  if (upscaleDiv) {
+    if (upscaleDiv.enabled != upscaleEnabled) {
+      upscaleDiv.enabled = upscaleEnabled;
+      upscaleDiv.innerText = 'Toggle Upscaling ' + (upscaleEnabled ? '[on]' : '[off]');
     }
-
-    const targetDiv = document.getElementsByClassName('reader-controls-mode')[0];
-    if (!targetDiv) {
-      return;
+    if (prefetchDiv.enabled != prefetchEnabled) {
+      prefetchDiv.enabled = prefetchEnabled;
+      prefetchDiv.innerText = 'Toggle Prefetching ' + (prefetchEnabled ? '[on]' : '[off]');
     }
-
-    upscaleDiv = document.createElement('div');
-    upscaleDiv.setAttribute('id', 'mangadex-upscaler-toggle');
-    upscaleDiv.setAttribute('class', 'reader-controls-mode-direction w-100 cursor-pointer pb-2 px-2');
-    upscaleDiv.enabled = upscaleEnabled;
-    upscaleDiv.innerText = 'Toggle Upscaling ' + (upscaleEnabled ? '[on]' : '[off]');
-    upscaleDiv.onclick = toggleUpscaleEnabled;
-    targetDiv.appendChild(upscaleDiv);
-
-    prefetchDiv = document.createElement('div');
-    prefetchDiv.setAttribute('id', 'mangadex-prefetch-toggle');
-    prefetchDiv.setAttribute('class', 'reader-controls-mode-direction w-100 cursor-pointer pb-2 px-2');
-    prefetchDiv.title = 'You should turn MangaDex\'s normal preloading down to one page.'
-    prefetchDiv.enabled = prefetchEnabled;
-    prefetchDiv.innerText = 'Toggle Prefetching ' + (prefetchEnabled ? '[on]' : '[off]');
-    prefetchDiv.onclick = togglePrefetchEnabled;
-    targetDiv.appendChild(prefetchDiv);
+    return;
   }
+
+  const targetDiv = document.getElementsByClassName('reader-controls-mode')[0];
+  if (!targetDiv) {
+    return;
+  }
+
+  upscaleDiv = document.createElement('div');
+  upscaleDiv.setAttribute('id', 'mangadex-upscaler-toggle');
+  upscaleDiv.setAttribute('class', 'reader-controls-mode-direction w-100 cursor-pointer pb-2 px-2');
+  upscaleDiv.enabled = upscaleEnabled;
+  upscaleDiv.innerText = 'Toggle Upscaling ' + (upscaleEnabled ? '[on]' : '[off]');
+  upscaleDiv.onclick = toggleUpscaleEnabled;
+  targetDiv.appendChild(upscaleDiv);
+
+  prefetchDiv = document.createElement('div');
+  prefetchDiv.setAttribute('id', 'mangadex-prefetch-toggle');
+  prefetchDiv.setAttribute('class', 'reader-controls-mode-direction w-100 cursor-pointer pb-2 px-2');
+  prefetchDiv.title = 'You should turn MangaDex\'s normal preloading down to one page.'
+  prefetchDiv.enabled = prefetchEnabled;
+  prefetchDiv.innerText = 'Toggle Prefetching ' + (prefetchEnabled ? '[on]' : '[off]');
+  prefetchDiv.onclick = togglePrefetchEnabled;
+  targetDiv.appendChild(prefetchDiv);
 };
 
 const mutationObserver = new MutationObserver(handleMutation);

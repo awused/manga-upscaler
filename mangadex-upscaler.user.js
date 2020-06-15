@@ -3,7 +3,7 @@
 // @description Upscale mangadex images using https://github.com/awused/manga-upscaler.
 // @include     https://mangadex.org/*
 // @include     https://mangadex.cc/*
-// @version     0.9.4
+// @version     0.9.5
 // @grant       unsafeWindow
 // @grant       GM.setValue
 // @grant       GM.getValue
@@ -154,18 +154,23 @@ const preload = async (manga, currentChapterId, currentPage) => {
         preloadSrc = window.location.origin + preloadSrc;
       }
 
-      if (upscaleEnabled && !preloadedUpscaledImages.has(preloadKey)) {
-        preloadedUpscaledImages.set(
-            preloadKey,
-            newUpscaledImage(preloadSrc, chapter.chapter, page));
-        console.log('Upscaling: ' + preloadSrc);
-      }
-
+      let actions = [];
       if (prefetchEnabled && !preloadedNormalImages.has(preloadKey)) {
         const img = new Image();
         img.src = preloadSrc;
         preloadedNormalImages.set(preloadKey, img);
-        console.log('Prefetching: ' + preloadSrc);
+        actions.push('prefetching');
+      }
+
+      if (upscaleEnabled && !preloadedUpscaledImages.has(preloadKey)) {
+        preloadedUpscaledImages.set(
+            preloadKey,
+            newUpscaledImage(preloadSrc, chapter.chapter, page));
+        actions.push('upscaling');
+      }
+
+      if (actions.length) {
+        console.log(chapter.chapter + '-' + page + ' [' + actions.join(', ') + ']: ' + preloadKey);
       }
     }
     page = 0;
@@ -274,7 +279,18 @@ const handleMutation = () => {
   targetDiv.appendChild(prefetchDiv);
 };
 
-const mutationObserver = new MutationObserver(handleMutation);
+let mutationTimeout = undefined;
+
+const debounceMutations = () => {
+  if (!mutationTimeout) {
+    mutationTimeout = setTimeout(() => {
+      handleMutation();
+      mutationTimeout = undefined;
+    }, 0);
+  }
+};
+
+const mutationObserver = new MutationObserver(debounceMutations);
 
 const changeEnabled = (upscale, prefetch) => {
   if (upscaleEnabled === upscale && prefetchEnabled === prefetch) {

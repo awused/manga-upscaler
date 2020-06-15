@@ -3,7 +3,7 @@
 // @description Upscale mangadex images using https://github.com/awused/manga-upscaler.
 // @include     https://mangadex.org/*
 // @include     https://mangadex.cc/*
-// @version     0.9.5
+// @version     0.9.6
 // @grant       unsafeWindow
 // @grant       GM.setValue
 // @grant       GM.getValue
@@ -155,10 +155,10 @@ const preload = async (manga, currentChapterId, currentPage) => {
       }
 
       let actions = [];
-      if (prefetchEnabled && !preloadedNormalImages.has(preloadKey)) {
+      if (prefetchEnabled && !preloadedNormalImages.has(preloadSrc)) {
         const img = new Image();
         img.src = preloadSrc;
-        preloadedNormalImages.set(preloadKey, img);
+        preloadedNormalImages.set(preloadSrc, img);
         actions.push('prefetching');
       }
 

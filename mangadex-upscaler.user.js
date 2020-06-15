@@ -3,7 +3,7 @@
 // @description Upscale mangadex images using https://github.com/awused/manga-upscaler.
 // @include     https://mangadex.org/*
 // @include     https://mangadex.cc/*
-// @version     0.9.7
+// @version     0.9.8
 // @grant       unsafeWindow
 // @grant       GM.setValue
 // @grant       GM.getValue
@@ -65,7 +65,7 @@ const newUpscaledImage = (src, chapter, page) => {
   img.href = src;
   img.onerror = (e) => {
     // Retry once automatically, but any further retries will be manual.
-    console.log(`Retrying ${chapter}, ${page}`);
+    console.log(`Retrying ${chapter}-${page}`);
     img.onerror = null;
     img.src = img.src;
   };
@@ -298,17 +298,30 @@ const handleMutation = () => {
 };
 
 let mutationTimeout = undefined;
+let lastChapterId = undefined;
 
-const debounceMutations = () => {
+// Avoid prefetching from the end of the next chapter when transitioning between chapters.
+const debounceChapterChangeMutations = () => {
   if (!mutationTimeout) {
-    mutationTimeout = setTimeout(() => {
+    const content = document.getElementById('content');
+    if (!content) {
+      return;
+    }
+    const chapterId = content.getAttribute('data-chapter-id');
+
+    if (chapterId === lastChapterId) {
       handleMutation();
-      mutationTimeout = undefined;
-    }, 0);
+    } else {
+      lastChapterId = chapterId;
+      mutationTimeout = setTimeout(() => {
+        handleMutation();
+        mutationTimeout = undefined;
+      }, 0);
+    }
   }
 };
 
-const mutationObserver = new MutationObserver(debounceMutations);
+const mutationObserver = new MutationObserver(debounceChapterChangeMutations);
 
 const changeEnabled = (upscale, prefetch) => {
   if (upscaleEnabled === upscale && prefetchEnabled === prefetch) {

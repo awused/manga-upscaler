@@ -3,7 +3,7 @@
 // @description Upscale mangadex images using https://github.com/awused/manga-upscaler.
 // @include     https://mangadex.org/*
 // @include     https://mangadex.cc/*
-// @version     0.9.6
+// @version     0.9.7
 // @grant       unsafeWindow
 // @grant       GM.setValue
 // @grant       GM.getValue
@@ -29,7 +29,7 @@ TODOs
 - Specify target size.
 
 */
-const IMAGE_REGEX = /^https:\/\/([a-zA-Z0-9]+\.)*mangadex\.((org|cc)|network(:\d+)?\/[a-zA-Z0-9-_]+)\/data\/([a-zA-Z0-9]+\/[a-zA-Z]*[0-9]+\.(jpg|png|jpeg))$/i;
+const IMAGE_REGEX = /^(https:\/\/([a-zA-Z0-9]+\.)*mangadex\.((org|cc)|network(:\d+)?\/[a-zA-Z0-9-_]+)\/data\/)([a-zA-Z0-9]+\/[a-zA-Z]*[0-9]+\.(jpg|png|jpeg))$/i;
 const LOCALHOST_REGEX = new RegExp(`^http:\/\/localhost:${port}\/([^?]+)`);
 const API_ROOT = window.location.origin + '/api';
 
@@ -50,7 +50,7 @@ let currentMangaPromise = Promise.resolve(undefined);
 const chapterPromiseMap = new Map();  // Keep all chapter metadata on hand
 
 const srcToKey = (src) => {
-  return src.match(IMAGE_REGEX)[5];
+  return src.match(IMAGE_REGEX)[6];
 };
 
 // Replacing the current image
@@ -138,7 +138,7 @@ const getNextChapterId = (manga, id) => {
   return nextChapterId;
 };
 
-const preload = async (manga, currentChapterId, currentPage) => {
+const preload = async (manga, currentChapterId, currentPage, currentServer) => {
   let page = parseInt(currentPage);  // This is 1-indexed so it's actually the next page
   let chapterId = currentChapterId;
   let chapter = await getOrFetchChapter(chapterId);
@@ -146,6 +146,11 @@ const preload = async (manga, currentChapterId, currentPage) => {
   let preloadRemaining = preloadLimit;
 
   while (chapter) {
+    if (currentServer && chapterId === currentChapterId) {
+      // We may have prefetched a different server than the one Mangadex ended up picking.
+      chapter.server = currentServer;
+    }
+
     for (; chapter.page_array.length > page && preloadRemaining >= 0; page++) {
       preloadRemaining--;
       preloadKey = chapter.hash + '/' + chapter.page_array[page];
@@ -155,11 +160,16 @@ const preload = async (manga, currentChapterId, currentPage) => {
       }
 
       let actions = [];
-      if (prefetchEnabled && !preloadedNormalImages.has(preloadSrc)) {
-        const img = new Image();
-        img.src = preloadSrc;
-        preloadedNormalImages.set(preloadSrc, img);
-        actions.push('prefetching');
+      // Only even try to prefetch the first page of non-current chapters.
+      // It's very likely the server will have changed by the time the chapter is loaded.
+      // This is still sometimes functional for single image chapters.
+      if ((currentServer && chapterId === currentChapterId) || page === 0) {
+        if (prefetchEnabled && !preloadedNormalImages.has(preloadSrc)) {
+          const img = new Image();
+          img.src = preloadSrc;
+          preloadedNormalImages.set(preloadSrc, img);
+          actions.push('prefetching');
+        }
       }
 
       if (upscaleEnabled && !preloadedUpscaledImages.has(preloadKey)) {
@@ -170,7 +180,7 @@ const preload = async (manga, currentChapterId, currentPage) => {
       }
 
       if (actions.length) {
-        console.log(chapter.chapter + '-' + page + ' [' + actions.join(', ') + ']: ' + preloadKey);
+        console.log(chapter.chapter + '-' + page + ' [' + actions.join(', ') + ']: ' + preloadKey + ' (' + chapter.server + ')');
       }
     }
     page = 0;
@@ -191,7 +201,7 @@ const preload = async (manga, currentChapterId, currentPage) => {
   }
 };
 
-const checkCurrentStateAndPreload = async () => {
+const checkCurrentStateAndPreload = async (currentServer) => {
   const content = document.getElementById('content');
   if (!content) {
     return;
@@ -219,17 +229,25 @@ const checkCurrentStateAndPreload = async () => {
     return;
   }
 
-  preload(manga, chapterId, currentPage);
+  preload(manga, chapterId, currentPage, currentServer);
 };
 
 // Enabling/disabling
 
 const handleMutation = () => {
+  let currentServer = undefined;
+
   for (let img of document.images) {
-    if (upscaleEnabled && img.src.match(IMAGE_REGEX)) {
-      replace(img);
+    let match = img.src.match(IMAGE_REGEX);
+    if (match) {
+      if (prefetchEnabled) {
+        currentServer = match[1];
+      }
+      if (upscaleEnabled) {
+        replace(img);
+      }
     } else if (!upscaleEnabled) {
-      let match = img.src.match(LOCALHOST_REGEX);
+      match = img.src.match(LOCALHOST_REGEX);
       if (match) {
         img.src = atob(decodeURIComponent(match[1]));
       }
@@ -238,7 +256,7 @@ const handleMutation = () => {
 
   if (upscaleEnabled || prefetchEnabled) {
     // Returns a promise that we do not need to wait on
-    checkCurrentStateAndPreload();
+    checkCurrentStateAndPreload(currentServer);
   }
 
   // Add a toggle button if not present

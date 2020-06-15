@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"io"
@@ -182,10 +184,13 @@ func cacheImage(key string, chapter string, page string) (string, error) {
 	}
 	imageURL := string(imageURLBytes)
 
+	hash := sha256.Sum256(imageURLBytes)
+	hashString := hex.EncodeToString(hash[:])
+
 	extension := filepath.Ext(imageURL)
-	inFile := filepath.Join(tempDir, key) + extension
+	inFile := filepath.Join(tempDir, hashString) + extension
 	// These may be the same
-	outFile := filepath.Join(tempDir, key) + ".png"
+	outFile := filepath.Join(tempDir, hashString) + ".png"
 
 	mapLock.Lock()
 	existingImage, ok := cache[key]

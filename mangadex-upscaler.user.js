@@ -3,7 +3,7 @@
 // @description Upscale mangadex images using https://github.com/awused/manga-upscaler.
 // @include     https://mangadex.org/*
 // @include     https://mangadex.cc/*
-// @version     0.9.3
+// @version     0.9.4
 // @grant       unsafeWindow
 // @grant       GM.setValue
 // @grant       GM.getValue
@@ -29,7 +29,7 @@ TODOs
 - Specify target size.
 
 */
-const IMAGE_REGEX = /^https:\/\/([a-zA-Z0-9]+\.)*mangadex\.((org|cc)|network(:\d+)?\/[a-zA-Z0-9-_]+)\/data\/[a-zA-Z0-9]+\/[a-zA-Z]*[0-9]+\.(jpg|png|jpeg)$/i;
+const IMAGE_REGEX = /^https:\/\/([a-zA-Z0-9]+\.)*mangadex\.((org|cc)|network(:\d+)?\/[a-zA-Z0-9-_]+)\/data\/([a-zA-Z0-9]+\/[a-zA-Z]*[0-9]+\.(jpg|png|jpeg))$/i;
 const LOCALHOST_REGEX = new RegExp(`^http:\/\/localhost:${port}\/([^?]+)`);
 const API_ROOT = window.location.origin + '/api';
 
@@ -48,6 +48,10 @@ let currentMangaId = undefined;
 let currentMangaPromise = Promise.resolve(undefined);
 
 const chapterPromiseMap = new Map();  // Keep all chapter metadata on hand
+
+const srcToKey = (src) => {
+  return src.match(IMAGE_REGEX)[5];
+};
 
 // Replacing the current image
 
@@ -69,7 +73,8 @@ const newUpscaledImage = (src, chapter, page) => {
 };
 
 const replace = (img) => {
-  let newElement = preloadedUpscaledImages.get(img.src);
+  const key = srcToKey(img.src);
+  let newElement = preloadedUpscaledImages.get(key);
   if (!newElement) {
     newElement = newUpscaledImage(img.src);
   }
@@ -78,7 +83,7 @@ const replace = (img) => {
   img.insertAdjacentElement('afterend', newElement);
   // Insert a clone into the map so it doesn't get mutated.
   // We display the "original" since it will display instantly if loaded.
-  preloadedUpscaledImages.set(img.src, newElement.cloneNode());
+  preloadedUpscaledImages.set(key, newElement.cloneNode());
   img.parentNode.removeChild(img);
 };
 
@@ -90,7 +95,7 @@ const getOrFetchChapter = (id) => {
     chapterPromiseMap
         .set(
             id,
-            fetch(`${API_ROOT}?id=${id}&server=${imageServer}&type=chapter`)
+            fetch(`${API_ROOT}?id=${id}&server=${imageServer}&saver=0&type=chapter`)
                 .then((response) => response.json(), () => undefined));
   }
   return chapterPromiseMap.get(id);
@@ -143,22 +148,23 @@ const preload = async (manga, currentChapterId, currentPage) => {
   while (chapter) {
     for (; chapter.page_array.length > page && preloadRemaining >= 0; page++) {
       preloadRemaining--;
-      preloadSrc = chapter.server + chapter.hash + '/' + chapter.page_array[page];
+      preloadKey = chapter.hash + '/' + chapter.page_array[page];
+      preloadSrc = chapter.server + preloadKey;
       if (chapter.server === '/data/') {
         preloadSrc = window.location.origin + preloadSrc;
       }
 
-      if (upscaleEnabled && !preloadedUpscaledImages.has(preloadSrc)) {
+      if (upscaleEnabled && !preloadedUpscaledImages.has(preloadKey)) {
         preloadedUpscaledImages.set(
-            preloadSrc,
+            preloadKey,
             newUpscaledImage(preloadSrc, chapter.chapter, page));
         console.log('Upscaling: ' + preloadSrc);
       }
 
-      if (prefetchEnabled && !preloadedNormalImages.has(preloadSrc)) {
+      if (prefetchEnabled && !preloadedNormalImages.has(preloadKey)) {
         const img = new Image();
         img.src = preloadSrc;
-        preloadedNormalImages.set(preloadSrc, img);
+        preloadedNormalImages.set(preloadKey, img);
         console.log('Prefetching: ' + preloadSrc);
       }
     }

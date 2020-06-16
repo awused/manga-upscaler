@@ -3,7 +3,7 @@
 // @description Upscale mangadex images using https://github.com/awused/manga-upscaler.
 // @include     https://mangadex.org/*
 // @include     https://mangadex.cc/*
-// @version     0.9.8
+// @version     0.9.9
 // @grant       unsafeWindow
 // @grant       GM.setValue
 // @grant       GM.getValue
@@ -27,6 +27,7 @@ const preloadLimit = 20;
 TODOs
 
 - Specify target size.
+- Key cached images by the chapter hash + page instead of the full URL
 
 */
 const IMAGE_REGEX = /^(https:\/\/([a-zA-Z0-9]+\.)*mangadex\.((org|cc)|network(:\d+)?\/[a-zA-Z0-9-_]+)\/data\/)([a-zA-Z0-9]+\/[a-zA-Z]*[0-9]+\.(jpg|png|jpeg))$/i;
@@ -66,7 +67,12 @@ const newUpscaledImage = (src, chapter, page) => {
   img.onerror = (e) => {
     // Retry once automatically, but any further retries will be manual.
     console.log(`Retrying ${chapter}-${page}`);
-    img.onerror = null;
+    img.onerror = () => {
+      const key = srcToKey(src);
+      if (preloadedUpscaledImages.has(key)) {
+        preloadedUpscaledImages.delete(key);
+      }
+    };
     img.src = img.src;
   };
   return img;

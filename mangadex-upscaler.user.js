@@ -3,7 +3,7 @@
 // @description Upscale mangadex images using https://github.com/awused/manga-upscaler.
 // @include     https://mangadex.org/*
 // @include     https://mangadex.cc/*
-// @version     0.9.9
+// @version     0.9.9a
 // @grant       unsafeWindow
 // @grant       GM.setValue
 // @grant       GM.getValue
@@ -30,7 +30,7 @@ TODOs
 - Key cached images by the chapter hash + page instead of the full URL
 
 */
-const IMAGE_REGEX = /^(https:\/\/([a-zA-Z0-9]+\.)*mangadex\.((org|cc)|network(:\d+)?\/[a-zA-Z0-9-_]+)\/data\/)([a-zA-Z0-9]+\/[a-zA-Z]*[0-9]+\.(jpg|png|jpeg))$/i;
+const IMAGE_REGEX = /^(https:\/\/([a-zA-Z0-9]+\.)*mangadex\.((org|cc)|network(:\d+)?\/[a-zA-Z0-9-_]+)\/data\/)([a-zA-Z0-9]+\/[a-zA-Z0-9]+\.(jpg|png|jpeg))$/i;
 const LOCALHOST_REGEX = new RegExp(`^http:\/\/localhost:${port}\/([^?]+)`);
 const API_ROOT = window.location.origin + '/api';
 

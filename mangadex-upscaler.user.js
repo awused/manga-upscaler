@@ -3,7 +3,7 @@
 // @description Upscale mangadex images using https://github.com/awused/manga-upscaler.
 // @include     https://mangadex.org/*
 // @include     https://mangadex.cc/*
-// @version     0.9.9a
+// @version     1.0.0
 // @grant       unsafeWindow
 // @grant       GM.setValue
 // @grant       GM.getValue

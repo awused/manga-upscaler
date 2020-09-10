@@ -3,7 +3,7 @@
 // @description Upscale mangadex images using https://github.com/awused/manga-upscaler.
 // @include     https://mangadex.org/*
 // @include     https://mangadex.cc/*
-// @version     1.0.1
+// @version     1.0.2
 // @grant       unsafeWindow
 // @grant       GM.setValue
 // @grant       GM.getValue
@@ -335,7 +335,8 @@ const changeEnabled = (upscale, prefetch) => {
   }
 
   upscaleEnabled = upscale;
-  prefetchEnabled = prefetch;
+  // TODO -- remove and clean up.
+  prefetchEnabled = false;
 
   if (upscaleEnabled || prefetchEnabled) {
     mutationObserver.observe(document.body, {
@@ -370,6 +371,6 @@ const keyUp = (e) => {
 document.addEventListener('keyup', keyUp, false);
 Promise.all([
          GM.getValue('mangadex-upscaler-enabled', true),
-         GM.getValue('mangadex-prefetch-enabled', true)
+         GM.getValue('mangadex-prefetch-enabled', false)
        ])
     .then(values => changeEnabled(...values));

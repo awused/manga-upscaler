@@ -64,6 +64,7 @@ var listener net.Listener
 var tempDir string
 var closed = make(chan struct{})
 var jobsChan = make(chan *upscaleJob)
+var downloadThrottle = make(chan struct{})
 
 var errClosed = errors.New("Closed")
 
@@ -100,6 +101,9 @@ func main() {
 	if err != nil {
 		log.Panic(err)
 	}
+
+	throttleChan := make(chan struct{})
+	go runThrottler(throttleChan)
 
 	serverChan := make(chan error)
 	go runServer(serverChan)
@@ -160,6 +164,27 @@ func runServer(serverChan chan<- error) {
 	}
 }
 
+func runThrottler(throttleChan chan<- struct{}) {
+	defer close(throttleChan)
+
+	for true {
+		select {
+		case downloadThrottle <- struct{}{}:
+		case <-closed:
+			return
+		}
+
+		select {
+		// Mangadex limit is one per second
+		// but there are limited advantages to going that fast when upscaling
+		// typically takes longer and the user still needs to read them.
+		case <-time.After(3 * time.Second):
+		case <-closed:
+			return
+		}
+	}
+}
+
 func getRouter() http.Handler {
 	middleware.DefaultLogger = middleware.RequestLogger(
 		&middleware.DefaultLogFormatter{
@@ -212,6 +237,11 @@ func cacheImage(key string, chapter string, page string) (string, error) {
 
 	maybeDeleteImage()
 
+	select {
+	case <-downloadThrottle:
+	case <-closed:
+		return "", errClosed
+	}
 	err = downloadImage(imageURL, inFile)
 	if err != nil {
 		os.Remove(inFile)

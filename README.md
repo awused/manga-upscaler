@@ -8,13 +8,13 @@ Toggle upscaling with the u key or by clicking the toggle added to the display c
 
 ## Prefetching
 
-There's a second option to just enable prefetching of normal resolution images. When using this you should decrease the preload setting in Mangadex to just one image, since it will be redundant. Prefetching from this script will cross chapter boundaries when the sub groups remain the same.
+~~There's a second option to just enable prefetching of normal resolution images. When using this you should decrease the preload setting in Mangadex to just one image, since it will be redundant. Prefetching from this script will cross chapter boundaries when the sub groups remain the same.~~
 
-Prefetching without upscaling does not require the server to be running or installed.
+~~Prefetching without upscaling does not require the server to be running or installed.~~
+
+Prefetching normal images is currently disabled since Mangadex issues temporary bans for exceeding their limits. Use the built-in Mangadex preloader and don't open too many tabs at once.
 
 ## Running the Server
-
-The server is only necessary for upscaling.
 
 `go get -u github.com/awused/manga-upscaler`
 

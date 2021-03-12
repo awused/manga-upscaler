@@ -3,7 +3,7 @@
 // @description Upscale mangadex images using https://github.com/awused/manga-upscaler.
 // @include     https://mangadex.org/*
 // @include     https://mangadex.cc/*
-// @version     1.0.2
+// @version     1.1.0
 // @grant       unsafeWindow
 // @grant       GM.setValue
 // @grant       GM.getValue
@@ -30,12 +30,12 @@ TODOs
 - Key cached images by the chapter hash + page instead of the full URL
 
 */
+const BLOB_REGEX = /^blob:https:\/\/mangadex\.(org|cc)\/[a-zA-Z0-9-]+$/
 const IMAGE_REGEX = /^(https:\/\/([a-zA-Z0-9]+\.)*mangadex\.((org|cc)|network(:\d+)?\/[a-zA-Z0-9-_]+)\/data\/)([a-zA-Z0-9-_]+\/[a-zA-Z0-9-_]+\.(jpg|png|jpeg))$/i;
 const LOCALHOST_REGEX = new RegExp(`^http:\/\/localhost:${port}\/([^?]+)`);
 const API_ROOT = window.location.origin + '/api';
 
 let upscaleEnabled = null;
-let prefetchEnabled = null;
 
 const preloadedUpscaledImages = new Map();
 const preloadedNormalImages = new Map();
@@ -78,11 +78,27 @@ const newUpscaledImage = (src, chapter, page) => {
   return img;
 };
 
-const replace = (img) => {
-  const key = srcToKey(img.src);
+const replace = async (img) => {
+  const content = document.getElementById('content');
+  if (!content) {
+    return;
+  }
+
+  const mangaId = content.getAttribute('data-manga-id');
+  const chapterId = content.getAttribute('data-chapter-id');
+  const currentPage = content.getAttribute('data-current-page');
+  if (!mangaId || !chapterId || !currentPage) {
+    return;
+  }
+
+  const chapter = await getOrFetchChapter(chapterId);
+
+  const key = chapter.hash + '/' + chapter.page_array[currentPage - 1];
+  const imgSrc = chapter.server + key;
+
   let newElement = preloadedUpscaledImages.get(key);
   if (!newElement) {
-    newElement = newUpscaledImage(img.src);
+    newElement = newUpscaledImage(imgSrc);
   }
 
   // Delete the old image and attach a new one to avoid visible transitions.
@@ -90,7 +106,7 @@ const replace = (img) => {
   // Insert a clone into the map so it doesn't get mutated.
   // We display the "original" since it will display instantly if loaded.
   preloadedUpscaledImages.set(key, newElement.cloneNode());
-  img.parentNode.removeChild(img);
+  img.parentElement.removeChild(img);
 };
 
 
@@ -144,7 +160,7 @@ const getNextChapterId = (manga, id) => {
   return nextChapterId;
 };
 
-const preload = async (manga, currentChapterId, currentPage, currentServer) => {
+const preload = async (manga, currentChapterId, currentPage) => {
   let page = parseInt(currentPage);  // This is 1-indexed so it's actually the next page
   let chapterId = currentChapterId;
   let chapter = await getOrFetchChapter(chapterId);
@@ -152,11 +168,6 @@ const preload = async (manga, currentChapterId, currentPage, currentServer) => {
   let preloadRemaining = preloadLimit;
 
   while (chapter) {
-    if (currentServer && chapterId === currentChapterId) {
-      // We may have prefetched a different server than the one Mangadex ended up picking.
-      chapter.server = currentServer;
-    }
-
     for (; chapter.page_array.length > page && preloadRemaining >= 0; page++) {
       preloadRemaining--;
       preloadKey = chapter.hash + '/' + chapter.page_array[page];
@@ -166,17 +177,6 @@ const preload = async (manga, currentChapterId, currentPage, currentServer) => {
       }
 
       let actions = [];
-      // Only even try to prefetch the first page of non-current chapters.
-      // It's very likely the server will have changed by the time the chapter is loaded.
-      // This is still sometimes functional for single image chapters.
-      if ((currentServer && chapterId === currentChapterId) || page === 0) {
-        if (prefetchEnabled && !preloadedNormalImages.has(preloadSrc)) {
-          const img = new Image();
-          img.src = preloadSrc;
-          preloadedNormalImages.set(preloadSrc, img);
-          actions.push('prefetching');
-        }
-      }
 
       if (upscaleEnabled && !preloadedUpscaledImages.has(preloadKey)) {
         preloadedUpscaledImages.set(
@@ -207,7 +207,7 @@ const preload = async (manga, currentChapterId, currentPage, currentServer) => {
   }
 };
 
-const checkCurrentStateAndPreload = async (currentServer) => {
+const checkCurrentStateAndPreload = async () => {
   const content = document.getElementById('content');
   if (!content) {
     return;
@@ -228,86 +228,79 @@ const checkCurrentStateAndPreload = async (currentServer) => {
         fetch(`${API_ROOT}?id=${mangaId}&type=manga`)
             .then((response) => response.json(), () => undefined);
   }
-  manga = await currentMangaPromise;
+  const manga = await currentMangaPromise;
   if (!manga) {
     console.log('Unable to fetch manga metadata from API. Giving up.');
     changeEnabled(false, false);
     return;
   }
 
-  preload(manga, chapterId, currentPage, currentServer);
+  preload(manga, chapterId, currentPage);
 };
 
 // Enabling/disabling
 
-const handleMutation = () => {
-  let currentServer = undefined;
+const handleMutation = async () => {
+  // Add a toggle button if not present
+  let upscaleDiv = document.getElementById('mangadex-upscaler-toggle');
+  if (upscaleDiv) {
+    if (upscaleDiv.enabled != upscaleEnabled) {
+      upscaleDiv.enabled = upscaleEnabled;
+      upscaleDiv.innerText = 'Toggle Upscaling ' + (upscaleEnabled ? '[on]' : '[off]');
+    }
+  } else {
+    const targetDiv = document.getElementsByClassName('reader-controls-mode')[0];
+    if (!targetDiv) {
+      return;
+    }
+
+    upscaleDiv = document.createElement('div');
+    upscaleDiv.setAttribute('id', 'mangadex-upscaler-toggle');
+    upscaleDiv.setAttribute('class', 'reader-controls-mode-direction w-100 cursor-pointer pb-2 px-2');
+    upscaleDiv.enabled = upscaleEnabled;
+    upscaleDiv.innerText = 'Toggle Upscaling ' + (upscaleEnabled ? '[on]' : '[off]');
+    upscaleDiv.onclick = toggleUpscaleEnabled;
+    targetDiv.appendChild(upscaleDiv);
+  }
+
+  // Currently broken except in single page mode. Thanks mangadex.
+  if (!document.getElementsByClassName('show-single-page')[0].offsetParent) {
+    return;
+  }
 
   for (let img of document.images) {
-    let match = img.src.match(IMAGE_REGEX);
-    if (match) {
-      if (prefetchEnabled) {
-        currentServer = match[1];
-      }
-      if (upscaleEnabled) {
-        replace(img);
-      }
+    if ((img.src.match(BLOB_REGEX) || img.src.match(IMAGE_REGEX)) && upscaleEnabled) {
+      await replace(img);
     } else if (!upscaleEnabled) {
-      match = img.src.match(LOCALHOST_REGEX);
+      const match = img.src.match(LOCALHOST_REGEX);
       if (match) {
         img.src = atob(decodeURIComponent(match[1]));
       }
     }
   }
 
-  if (upscaleEnabled || prefetchEnabled) {
+  if (upscaleEnabled) {
     // Returns a promise that we do not need to wait on
-    checkCurrentStateAndPreload(currentServer);
+    checkCurrentStateAndPreload();
   }
-
-  // Add a toggle button if not present
-  let upscaleDiv = document.getElementById('mangadex-upscaler-toggle');
-  let prefetchDiv = document.getElementById('mangadex-prefetch-toggle');
-  if (upscaleDiv) {
-    if (upscaleDiv.enabled != upscaleEnabled) {
-      upscaleDiv.enabled = upscaleEnabled;
-      upscaleDiv.innerText = 'Toggle Upscaling ' + (upscaleEnabled ? '[on]' : '[off]');
-    }
-    if (prefetchDiv.enabled != prefetchEnabled) {
-      prefetchDiv.enabled = prefetchEnabled;
-      prefetchDiv.innerText = 'Toggle Prefetching ' + (prefetchEnabled ? '[on]' : '[off]');
-    }
-    return;
-  }
-
-  const targetDiv = document.getElementsByClassName('reader-controls-mode')[0];
-  if (!targetDiv) {
-    return;
-  }
-
-  upscaleDiv = document.createElement('div');
-  upscaleDiv.setAttribute('id', 'mangadex-upscaler-toggle');
-  upscaleDiv.setAttribute('class', 'reader-controls-mode-direction w-100 cursor-pointer pb-2 px-2');
-  upscaleDiv.enabled = upscaleEnabled;
-  upscaleDiv.innerText = 'Toggle Upscaling ' + (upscaleEnabled ? '[on]' : '[off]');
-  upscaleDiv.onclick = toggleUpscaleEnabled;
-  targetDiv.appendChild(upscaleDiv);
-
-  prefetchDiv = document.createElement('div');
-  prefetchDiv.setAttribute('id', 'mangadex-prefetch-toggle');
-  prefetchDiv.setAttribute('class', 'reader-controls-mode-direction w-100 cursor-pointer pb-2 px-2');
-  prefetchDiv.title = 'You should turn MangaDex\'s normal preloading down to one page.'
-  prefetchDiv.enabled = prefetchEnabled;
-  prefetchDiv.innerText = 'Toggle Prefetching ' + (prefetchEnabled ? '[on]' : '[off]');
-  prefetchDiv.onclick = togglePrefetchEnabled;
-  targetDiv.appendChild(prefetchDiv);
 };
 
 let mutationTimeout = undefined;
 let lastChapterId = undefined;
+let running = false;
 
 // Avoid prefetching from the end of the next chapter when transitioning between chapters.
-const debounceChapterChangeMutations = () => {
+const debounceChapterChangeMutations = async () => {
+  if (running) {
+    if (!mutationTimeout) {
+      mutationTimeout = setTimeout(() => {
+        handleMutation();
+        mutationTimeout = undefined;
+      }, 0);
+    }
+    return;
+  }
+
   if (!mutationTimeout) {
     const content = document.getElementById('content');
     if (!content) {
@@ -316,7 +309,13 @@ const debounceChapterChangeMutations = () => {
     const chapterId = content.getAttribute('data-chapter-id');
 
     if (chapterId === lastChapterId) {
-      handleMutation();
+      running = true;
+      try {
+        await handleMutation();
+      } catch (e) {
+        console.log(e);
+      }
+      running = false;
     } else {
       lastChapterId = chapterId;
       mutationTimeout = setTimeout(() => {
@@ -329,16 +328,14 @@ const debounceChapterChangeMutations = () => {
 
 const mutationObserver = new MutationObserver(debounceChapterChangeMutations);
 
-const changeEnabled = (upscale, prefetch) => {
-  if (upscaleEnabled === upscale && prefetchEnabled === prefetch) {
+const changeEnabled = (upscale) => {
+  if (upscaleEnabled === upscale) {
     return;
   }
 
   upscaleEnabled = upscale;
-  // TODO -- remove and clean up.
-  prefetchEnabled = false;
 
-  if (upscaleEnabled || prefetchEnabled) {
+  if (upscaleEnabled) {
     mutationObserver.observe(document.body, {
       childList: true,
       subtree: true,
@@ -351,14 +348,8 @@ const changeEnabled = (upscale, prefetch) => {
 
 // Could do better, but this is adequate for two settings.
 const toggleUpscaleEnabled = () => {
-  changeEnabled(!upscaleEnabled, prefetchEnabled);
+  changeEnabled(!upscaleEnabled);
   GM.setValue('mangadex-upscaler-enabled', upscaleEnabled);
-  handleMutation();
-};
-
-const togglePrefetchEnabled = () => {
-  changeEnabled(upscaleEnabled, !prefetchEnabled);
-  GM.setValue('mangadex-prefetch-enabled', prefetchEnabled);
   handleMutation();
 };
 
@@ -371,6 +362,5 @@ const keyUp = (e) => {
 document.addEventListener('keyup', keyUp, false);
 Promise.all([
          GM.getValue('mangadex-upscaler-enabled', true),
-         GM.getValue('mangadex-prefetch-enabled', false)
        ])
     .then(values => changeEnabled(...values));

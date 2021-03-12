@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -202,14 +203,8 @@ func getRouter() http.Handler {
 	return router
 }
 
-func cacheImage(key string, chapter string, page string) (string, error) {
-	imageURLBytes, err := base64.StdEncoding.DecodeString(key)
-	if err != nil {
-		return "", err
-	}
-	imageURL := string(imageURLBytes)
-
-	hash := sha256.Sum256(imageURLBytes)
+func cacheImage(imageURL string, imageKey string, chapter string, page string) (string, error) {
+	hash := sha256.Sum256([]byte(imageKey))
 	hashString := hex.EncodeToString(hash[:])
 
 	extension := filepath.Ext(imageURL)
@@ -218,7 +213,7 @@ func cacheImage(key string, chapter string, page string) (string, error) {
 	outFile := filepath.Join(tempDir, hashString) + ".png"
 
 	mapLock.Lock()
-	existingImage, ok := cache[key]
+	existingImage, ok := cache[imageKey]
 	if ok {
 		mapLock.Unlock()
 		<-existingImage.ready
@@ -226,12 +221,12 @@ func cacheImage(key string, chapter string, page string) (string, error) {
 	}
 
 	readyChan := make(chan struct{})
-	cache[key] = &cachedImage{
+	cache[imageKey] = &cachedImage{
 		file:      outFile,
 		ready:     readyChan,
 		timestamp: time.Now(),
 	}
-	cachedQueue = append(cachedQueue, key)
+	cachedQueue = append(cachedQueue, imageKey)
 	mapLock.Unlock()
 	defer close(readyChan)
 
@@ -242,12 +237,12 @@ func cacheImage(key string, chapter string, page string) (string, error) {
 	case <-closed:
 		return "", errClosed
 	}
-	err = downloadImage(imageURL, inFile)
+	err := downloadImage(imageURL, inFile)
 	if err != nil {
 		os.Remove(inFile)
 		os.Remove(outFile)
 		mapLock.Lock()
-		delete(cache, key)
+		delete(cache, imageKey)
 		mapLock.Unlock()
 		return "", err
 	}
@@ -267,7 +262,7 @@ func cacheImage(key string, chapter string, page string) (string, error) {
 		os.Remove(inFile)
 		os.Remove(outFile)
 		mapLock.Lock()
-		delete(cache, key)
+		delete(cache, imageKey)
 		mapLock.Unlock()
 		return "", errClosed
 	}
@@ -278,7 +273,7 @@ func cacheImage(key string, chapter string, page string) (string, error) {
 			os.Remove(inFile)
 			os.Remove(outFile)
 			mapLock.Lock()
-			delete(cache, key)
+			delete(cache, imageKey)
 			mapLock.Unlock()
 			return "", err
 		}
@@ -286,7 +281,7 @@ func cacheImage(key string, chapter string, page string) (string, error) {
 		os.Remove(inFile)
 		os.Remove(outFile)
 		mapLock.Lock()
-		delete(cache, key)
+		delete(cache, imageKey)
 		mapLock.Unlock()
 		return "", errClosed
 	}
@@ -446,9 +441,20 @@ UpscaleLoop:
 }
 
 func serveImage(w http.ResponseWriter, r *http.Request) {
-	imageKey := r.URL.Path[1:]
+	hashedPath := r.URL.Path[1:]
 	chapter := r.URL.Query().Get("chapter")
 	page := r.URL.Query().Get("page")
+
+	imageURLBytes, err := base64.StdEncoding.DecodeString(hashedPath)
+	if err != nil {
+		log.Panic(err)
+	}
+	imageURL := string(imageURLBytes)
+
+	imageKey := imageURL
+	if strings.Contains(imageURL, "/data/") {
+		imageKey = strings.Split(imageURL, "/data/")[1]
+	}
 
 	mapLock.Lock()
 	cached, ok := cache[imageKey]
@@ -458,7 +464,7 @@ func serveImage(w http.ResponseWriter, r *http.Request) {
 
 	if !ok {
 		var err error
-		file, err = cacheImage(imageKey, chapter, page)
+		file, err = cacheImage(imageURL, imageKey, chapter, page)
 		if err == errClosed {
 			return
 		} else if err != nil {

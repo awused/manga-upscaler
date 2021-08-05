@@ -1,10 +1,13 @@
+***_Attention_:*** This is deprecated in favour of [aw-man](https://github.com/awused/aw-man), which integrates upscaling into a standalone gui image viewer.
+
+
 Manga-Upscaler
 ==============
 
 # Installation
 
-Add [mangadex-upscaler.user.js](https://raw.githubusercontent.com/awused/manga-upscaler/master/mangadex-upscaler.user.js) to your browser as a user script.
-Toggle upscaling with the u key or by clicking the toggle added to the display controls.
+~~Add [mangadex-upscaler.user.js](https://raw.githubusercontent.com/awused/manga-upscaler/master/mangadex-upscaler.user.js) to your browser as a user script.
+Toggle upscaling with the u key or by clicking the toggle added to the display controls.~~
 
 ## Prefetching
 
